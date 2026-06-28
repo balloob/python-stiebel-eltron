@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
+from typing import Any
 
 from modbus_connection import ModbusError, ModbusUnit
 from modbus_connection.model import Component, RegisterField, integer
@@ -49,6 +50,27 @@ class StiebelEltronModbusError(Exception):
         super().__init__("Data error on the modbus")
 
 
+class StiebelComponent(Component):
+    """A :class:`Component` whose writable fields carry ISG value bounds.
+
+    ``_bounds`` maps a field name to its ``(min, max)`` range, in the field's
+    natural unit, as published in the Modbus documentation. :meth:`write` rejects
+    a value outside that range, so an out-of-spec setpoint is never sent to the
+    controller. A field with no entry (or a ``None`` bound) is left unconstrained.
+    """
+
+    _bounds: dict[str, tuple[float | None, float | None]] = {}
+
+    async def write(self, field: str, value: Any) -> None:
+        """Validate ``value`` against the field's bounds, then write it."""
+        minimum, maximum = self._bounds.get(field, (None, None))
+        if minimum is not None and value < minimum:
+            raise ValueError(f"{field}={value} is below the minimum of {minimum}")
+        if maximum is not None and value > maximum:
+            raise ValueError(f"{field}={value} is above the maximum of {maximum}")
+        await super().write(field, value)
+
+
 class ControllerModel(Enum):
     """Controller model."""
 
@@ -74,7 +96,7 @@ async def get_controller_model(unit: ModbusUnit) -> ControllerModel:
         raise StiebelEltronModbusError from err
 
 
-class EnergyManagementSettings(Component):
+class EnergyManagementSettings(StiebelComponent):
     """SG Ready energy-management settings (holding registers, read/write)."""
 
     register_space = "holding"
@@ -82,6 +104,12 @@ class EnergyManagementSettings(Component):
     switch_sg_ready_on_and_off = integer(4000, signed=False, nan=UNAVAILABLE, writable=True)
     sg_ready_input_1 = integer(4001, signed=False, nan=UNAVAILABLE, writable=True)
     sg_ready_input_2 = integer(4002, signed=False, nan=UNAVAILABLE, writable=True)
+
+    _bounds: dict[str, tuple[float | None, float | None]] = {
+        "switch_sg_ready_on_and_off": (0.0, 1.0),
+        "sg_ready_input_1": (0.0, 1.0),
+        "sg_ready_input_2": (0.0, 1.0),
+    }
 
 
 class EnergySystemInformation(Component):

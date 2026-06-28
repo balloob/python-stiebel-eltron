@@ -1,20 +1,20 @@
-"""Modbus api for stiebel eltron heat pumps. This file is generated. Do not modify it manually."""
+"""Modbus api for Stiebel Eltron LWZ integral ventilation units (Luft-Wärme-Zentrale). This file is generated. Do not modify it manually."""
 
 from __future__ import annotations
 
 from enum import Enum
 
 from modbus_connection import ModbusUnit
-from modbus_connection.model import Component, ComponentGroup, gauge, integer
+from modbus_connection.model import ComponentGroup, gauge, integer
 
-from . import UNAVAILABLE, EnergyManagementSettings, EnergySystemInformation, scaled_sum
+from . import UNAVAILABLE, EnergyManagementSettings, EnergySystemInformation, StiebelComponent, scaled_sum
 
 LWZ_HOLDING_RANGES = ((1000, 1026), (4000, 4002))
 LWZ_INPUT_RANGES = ((0, 33), (2000, 2004), (3000, 3031), (5000, 5001))
 
 
 class OperatingMode(Enum):
-    """Enum for the operation mode of the heat pump."""
+    """Enum for the operation mode of the LWZ unit."""
 
     AUTOMATIC = 11  # AUTOMATIK
     STANDBY = 1  # BEREITSCHAFT
@@ -25,7 +25,7 @@ class OperatingMode(Enum):
     EMERGENCY_OPERATION = 0  # NOTBETRIEB
 
 
-class LwzSystemValues(Component):
+class LwzSystemValues(StiebelComponent):
     register_space = "input"
     register_ranges = LWZ_INPUT_RANGES
 
@@ -74,7 +74,7 @@ class LwzSystemValues(Component):
         return high * 1000 + (low or 0)
 
 
-class LwzSystemParameters(Component):
+class LwzSystemParameters(StiebelComponent):
     register_space = "holding"
     register_ranges = LWZ_HOLDING_RANGES
 
@@ -106,8 +106,38 @@ class LwzSystemParameters(Component):
     reset = integer(1025, signed=False, nan=UNAVAILABLE, writable=True)
     restart_isg = integer(1026, signed=False, nan=UNAVAILABLE, writable=True)
 
+    _bounds: dict[str, tuple[float | None, float | None]] = {
+        "operating_mode": (0.0, 14.0),
+        "room_temperature_day_hk1": (10.0, 30.0),
+        "room_temperature_night_hk1": (10.0, 30.0),
+        "manual_hc_set_hk1": (10.0, 65.0),
+        "room_temperature_day_hk2": (10.0, 30.0),
+        "room_temperature_night_hk2": (10.0, 30.0),
+        "manual_hc_set_hk2": (10.0, 65.0),
+        "gradient_hk1": (0.0, 5.0),
+        "low_end_hk1": (0.0, 20.0),
+        "gradient_hk2": (0.0, 5.0),
+        "low_end_hk2": (0.0, 20.0),
+        "dhw_set_day": (10.0, 55.0),
+        "dhw_set_night": (10.0, 55.0),
+        "dhw_set_manual": (10.0, 65.0),
+        "mwm_set_day": (50.0, 288.0),
+        "mwm_set_night": (50.0, 288.0),
+        "mwm_set_manual": (50.0, 288.0),
+        "day_stage": (0.0, 3.0),
+        "night_stage": (0.0, 3.0),
+        "party_stage": (0.0, 3.0),
+        "manual_stage": (0.0, 3.0),
+        "room_temperature_day_hk1_cooling": (10.0, 30.0),
+        "room_temperature_night_hk1_cooling": (10.0, 30.0),
+        "room_temperature_day_hk2_cooling": (10.0, 30.0),
+        "room_temperature_night_hk2_cooling": (10.0, 30.0),
+        "reset": (0.0, 1.0),
+        "restart_isg": (0.0, 2.0),
+    }
 
-class LwzSystemState(Component):
+
+class LwzSystemState(StiebelComponent):
     register_space = "input"
     register_ranges = LWZ_INPUT_RANGES
 
@@ -118,7 +148,7 @@ class LwzSystemState(Component):
     operating_status_2 = integer(2004, signed=False, nan=UNAVAILABLE)
 
 
-class LwzEnergyData(Component):
+class LwzEnergyData(StiebelComponent):
     register_space = "input"
     register_ranges = LWZ_INPUT_RANGES
 
@@ -200,7 +230,7 @@ class LwzEnergyData(Component):
 
 
 class LwzStiebelEltronAPI:
-    """Stiebel Eltron heat pump API over a modbus_connection ModbusUnit."""
+    """Stiebel Eltron LWZ integral ventilation unit (Luft-Wärme-Zentrale) API over a modbus_connection ModbusUnit."""
 
     def __init__(self, unit: ModbusUnit) -> None:
         self.system_values = LwzSystemValues(unit)

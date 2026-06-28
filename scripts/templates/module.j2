@@ -1,0 +1,116 @@
+"""{{ module_doc }}"""
+
+from __future__ import annotations
+{% if heatpump.operating_mode %}
+
+from enum import Enum
+{% endif %}
+
+from modbus_connection import ModbusUnit
+from modbus_connection.model import ComponentGroup, gauge, integer
+
+from . import UNAVAILABLE, EnergyManagementSettings, EnergySystemInformation, StiebelComponent, scaled_sum
+
+{% for line in range_lines %}
+{{ line }}
+{% endfor %}
+{% if heatpump.operating_mode %}
+
+class OperatingMode(Enum):
+    """Enum for the operation mode of the LWZ unit."""
+
+    AUTOMATIC = 11  # AUTOMATIK
+    STANDBY = 1  # BEREITSCHAFT
+    DAY_MODE = 3  # TAGBETRIEB
+    SETBACK_MODE = 4  # ABSENKBETRIEB
+    DHW = 5  # WARMWASSER
+    MANUAL_MODE = 14  # HANDBETRIEB
+    EMERGENCY_OPERATION = 0  # NOTBETRIEB
+{% endif %}
+{% for component in components %}
+
+class {{ heatpump.type }}{{ component.class_suffix }}(StiebelComponent):
+    register_space = "{{ component.space }}"
+    register_ranges = {{ ranges_const(heatpump, component.space) }}
+
+{% for line in component.fields %}
+    {{ line }}
+{% endfor %}
+{% if component.bounds %}
+
+    _bounds: dict[str, tuple[float | None, float | None]] = {
+{% for attr, minimum, maximum in component.bounds %}
+        "{{ attr }}": ({{ minimum }}, {{ maximum }}),
+{% endfor %}
+    }
+{% endif %}
+{% if heatpump.compressor_starts and component.class_suffix == "SystemValues" %}
+
+    @property
+    def compressor_starts(self) -> int | None:
+        """Total compressor starts, combined from the HI/LOW registers."""
+        high = self.compressor_starts_hi
+        if high is None:
+            return None
+        low = self.compressor_starts_low
+        return high * 1000 + (low or 0)
+{% endif %}
+{% if component.day_and_total %}
+
+    _DAY_AND_TOTAL = (
+{% for day, total, running in component.day_and_total %}
+        ("{{ day }}", "{{ total }}", "{{ running }}"),
+{% endfor %}
+    )
+
+    def __init__(self, unit: ModbusUnit, index: int = 1) -> None:
+        super().__init__(unit, index)
+        self._running_totals: dict[str, int] = {}
+
+    def notify(self) -> None:
+        """Refresh the monotonic day-and-total counters, then notify listeners."""
+        for day_attr, total_attr, key in self._DAY_AND_TOTAL:
+            day = getattr(self, day_attr)
+            total = getattr(self, total_attr)
+            if day is not None and total is not None:
+                combined = day + total
+                previous = self._running_totals.get(key)
+                self._running_totals[key] = combined if previous is None else max(combined, previous)
+        super().notify()
+{% for day, total, running in component.day_and_total %}
+
+    @property
+    def {{ running }}(self) -> int | None:
+        return self._running_totals.get("{{ running }}")
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+class {{ heatpump.type }}StiebelEltronAPI:
+    """{{ api_doc }}"""
+
+    def __init__(self, unit: ModbusUnit) -> None:
+{% for component in components %}
+        self.{{ field_attr(component.block_name) }} = {{ heatpump.type }}{{ component.class_suffix }}(unit)
+{% endfor %}
+        self.energy_management_settings = EnergyManagementSettings(unit)
+        self.energy_management_settings.register_ranges = {{ ranges_const(heatpump, "holding") }}
+        self.energy_system_information = EnergySystemInformation(unit)
+        self.energy_system_information.register_ranges = {{ ranges_const(heatpump, "input") }}
+        self._group = ComponentGroup(
+            unit,
+            [
+{% for component in components %}
+                self.{{ field_attr(component.block_name) }},
+{% endfor %}
+                self.energy_management_settings,
+                self.energy_system_information,
+            ],
+        )
+
+    async def async_update(self) -> None:
+        """Read every component in one pooled set of block reads."""
+        await self._group.async_update()
+{% if heatpump.operating_mode %}
+{{ lwz_helpers }}
+{% endif %}

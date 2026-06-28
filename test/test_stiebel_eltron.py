@@ -87,6 +87,25 @@ async def test_write_register(mock_modbus_unit: MockModbusUnit) -> None:
     assert mock_modbus_unit.holding[1001] == 215
 
 
+@pytest.mark.asyncio()
+async def test_write_register_out_of_bounds(mock_modbus_unit: MockModbusUnit) -> None:
+    """A write outside the documented min/max range is rejected, not sent."""
+    api = LwzStiebelEltronAPI(mock_modbus_unit)
+
+    # room_temperature_day_hk1 is bounded to 10..30 °C.
+    with pytest.raises(ValueError, match="above the maximum"):
+        await api.set_target_temp(99.0)
+    with pytest.raises(ValueError, match="below the minimum"):
+        await api.system_parameters.write("room_temperature_day_hk1", -5.0)
+
+    # Nothing was written to the holding register for the rejected values.
+    assert 1001 not in mock_modbus_unit.holding
+
+    # A value inside the range still goes through.
+    await api.set_target_temp(21.5)
+    assert mock_modbus_unit.holding[1001] == 215
+
+
 @pytest.mark.parametrize(
     ("model_id", "expected"),
     [

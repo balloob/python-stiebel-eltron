@@ -1,17 +1,17 @@
-"""Modbus api for stiebel eltron heat pumps. This file is generated. Do not modify it manually."""
+"""Modbus api for Stiebel Eltron WPM heat pumps. This file is generated. Do not modify it manually."""
 
 from __future__ import annotations
 
 from modbus_connection import ModbusUnit
-from modbus_connection.model import Component, ComponentGroup, gauge, integer
+from modbus_connection.model import ComponentGroup, gauge, integer
 
-from . import UNAVAILABLE, EnergyManagementSettings, EnergySystemInformation, scaled_sum
+from . import UNAVAILABLE, EnergyManagementSettings, EnergySystemInformation, StiebelComponent, scaled_sum
 
 WPM_HOLDING_RANGES = ((1500, 1551), (4000, 4002))
 WPM_INPUT_RANGES = ((500, 609), (2500, 2546), (3500, 3585), (3707, 3722), (5000, 5001))
 
 
-class WpmSystemValues(Component):
+class WpmSystemValues(StiebelComponent):
     register_space = "input"
     register_ranges = WPM_INPUT_RANGES
 
@@ -127,7 +127,7 @@ class WpmSystemValues(Component):
     set_temperature_hk_3 = gauge(609, 0.1, nan=UNAVAILABLE, unit="°C")
 
 
-class WpmSystemParameters(Component):
+class WpmSystemParameters(StiebelComponent):
     register_space = "holding"
     register_ranges = WPM_HOLDING_RANGES
 
@@ -156,8 +156,35 @@ class WpmSystemParameters(Component):
     eco_temperature_hk_3 = gauge(1550, 0.1, nan=UNAVAILABLE, unit="°C", writable=True)
     heating_curve_rise_hk_3 = gauge(1551, 0.01, nan=UNAVAILABLE, writable=True)
 
+    _bounds: dict[str, tuple[float | None, float | None]] = {
+        "operating_mode": (0.0, 5.0),
+        "comfort_temperature_hk_1": (5.0, 30.0),
+        "eco_temperature_hk_1": (5.0, 30.0),
+        "heating_curve_rise_hk_1": (0.0, 3.0),
+        "comfort_temperature_hk_2": (5.0, 30.0),
+        "eco_temperature_hk_2": (5.0, 30.0),
+        "heating_curve_rise_hk_2": (0.0, 3.0),
+        "fixed_value_operation": (20.0, 70.0),
+        "dual_mode_temp_hzg": (-40.0, 40.0),
+        "comfort_temperature": (10.0, 60.0),
+        "eco_temperature": (10.0, 60.0),
+        "dhw_stages": (0.0, 6.0),
+        "dual_mode_temp_ww": (-40.0, 40.0),
+        "set_flow_temperature_area": (7.0, 25.0),
+        "flow_temp_hysteresis_area": (1.0, 5.0),
+        "set_room_temperature_area": (20.0, 30.0),
+        "set_flow_temperature_fan": (7.0, 25.0),
+        "flow_temp_hysteresis_fan": (1.0, 5.0),
+        "set_room_temperature_fan": (20.0, 30.0),
+        "reset": (1.0, 3.0),
+        "restart_isg": (0.0, 2.0),
+        "comfort_temperature_hk_3": (5.0, 30.0),
+        "eco_temperature_hk_3": (5.0, 30.0),
+        "heating_curve_rise_hk_3": (0.0, 3.0),
+    }
 
-class WpmSystemState(Component):
+
+class WpmSystemState(StiebelComponent):
     register_space = "input"
     register_ranges = WPM_INPUT_RANGES
 
@@ -210,7 +237,7 @@ class WpmSystemState(Component):
     compressor_6 = integer(2546, signed=False, nan=UNAVAILABLE)
 
 
-class WpmEnergyData(Component):
+class WpmEnergyData(StiebelComponent):
     register_space = "input"
     register_ranges = WPM_INPUT_RANGES
 
@@ -380,7 +407,7 @@ class WpmEnergyData(Component):
         return self._running_totals.get("vd_dhw_day_and_total_consumed_hp_3")
 
 
-class WpmPowerConsumption(Component):
+class WpmPowerConsumption(StiebelComponent):
     register_space = "input"
     register_ranges = WPM_INPUT_RANGES
 
@@ -397,7 +424,7 @@ class WpmPowerConsumption(Component):
 
 
 class WpmStiebelEltronAPI:
-    """Stiebel Eltron heat pump API over a modbus_connection ModbusUnit."""
+    """Stiebel Eltron WPM heat pump API over a modbus_connection ModbusUnit."""
 
     def __init__(self, unit: ModbusUnit) -> None:
         self.system_values = WpmSystemValues(unit)
